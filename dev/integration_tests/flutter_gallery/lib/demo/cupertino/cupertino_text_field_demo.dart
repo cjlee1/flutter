@@ -5,6 +5,8 @@
 import 'package:flutter/cupertino.dart';
 
 class CupertinoTextFieldDemo extends StatefulWidget {
+  const CupertinoTextFieldDemo({Key? key}) : super(key: key);
+
   static const String routeName = '/cupertino/text_fields';
 
   @override
@@ -14,8 +16,8 @@ class CupertinoTextFieldDemo extends StatefulWidget {
 }
 
 class _CupertinoTextFieldDemoState extends State<CupertinoTextFieldDemo> {
-  TextEditingController _chatTextController;
-  TextEditingController _locationTextController;
+  TextEditingController? _chatTextController;
+  TextEditingController? _locationTextController;
 
   @override
   void initState() {
@@ -49,12 +51,12 @@ class _CupertinoTextFieldDemoState extends State<CupertinoTextFieldDemo> {
             color: CupertinoColors.activeGreen,
           ),
           padding: const EdgeInsets.only(bottom: 4),
-          onPressed: ()=> setState(()=> _chatTextController.clear()),
+          onPressed: ()=> setState(()=> _chatTextController!.clear()),
         ),
       ),
       autofocus: true,
       suffixMode: OverlayVisibilityMode.editing,
-      onSubmitted: (String text)=> setState(()=> _chatTextController.clear()),
+      onSubmitted: (String text)=> setState(()=> _chatTextController!.clear()),
     );
   }
 

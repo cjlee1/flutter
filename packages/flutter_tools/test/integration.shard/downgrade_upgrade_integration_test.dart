@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
@@ -99,7 +101,6 @@ void main() {
       'describe',
       '--match',
       'v*.*.*',
-      '--first-parent',
       '--long',
       '--tags',
     ], workingDirectory: testDirectory.path);
@@ -123,7 +124,6 @@ void main() {
       'describe',
       '--match',
       'v*.*.*',
-      '--first-parent',
       '--long',
       '--tags',
     ], workingDirectory: testDirectory.path);

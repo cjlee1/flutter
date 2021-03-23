@@ -2,17 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 
 import 'package:meta/meta.dart';
-import 'package:package_config/package_config.dart';
 
 import '../artifacts.dart';
 import '../base/file_system.dart';
 import '../build_info.dart';
 import '../bundle.dart';
 import '../compile.dart';
-import '../dart/package_map.dart';
 import '../globals.dart' as globals;
 import '../project.dart';
 
@@ -45,7 +45,6 @@ class TestCompiler {
         'test_cache',
         getDefaultCachedKernelPath(
           trackWidgetCreation: buildInfo.trackWidgetCreation,
-          nullSafetyMode: buildInfo.nullSafetyMode,
           dartDefines: buildInfo.dartDefines,
           extraFrontEndOptions: buildInfo.extraFrontEndOptions,
         )) {
@@ -108,15 +107,14 @@ class TestCompiler {
       initializeFromDill: testFilePath,
       unsafePackageSerialization: false,
       dartDefines: buildInfo.dartDefines,
-      packagesPath: globalPackagesPath,
+      packagesPath: buildInfo.packagesPath,
       extraFrontEndOptions: buildInfo.extraFrontEndOptions,
       platform: globals.platform,
       testCompilation: true,
+      fileSystem: globals.fs,
     );
     return residentCompiler;
   }
-
-  PackageConfig _packageConfig;
 
   // Handle a compilation request.
   Future<void> _onCompilationRequest(_CompilationRequest request) async {
@@ -127,28 +125,6 @@ class TestCompiler {
     // compilation request at a time".
     if (!isEmpty) {
       return;
-    }
-    if (_packageConfig == null) {
-      _packageConfig ??= await loadPackageConfigWithLogging(
-        globals.fs.file(globalPackagesPath),
-        logger: globals.logger,
-      );
-      // Compilation will fail if there is no flutter_test dependency, since
-      // this library is imported by the generated entrypoint script.
-      if (_packageConfig['flutter_test'] == null) {
-        globals.printError(
-          '\n'
-          'Error: cannot run without a dependency on "package:flutter_test". '
-          'Ensure the following lines are present in your pubspec.yaml:'
-          '\n\n'
-          'dev_dependencies:\n'
-          '  flutter_test:\n'
-          '    sdk: flutter\n',
-        );
-        request.result.complete(null);
-        await compilerController.close();
-        return;
-      }
     }
     while (compilationQueue.isNotEmpty) {
       final _CompilationRequest request = compilationQueue.first;
@@ -163,7 +139,7 @@ class TestCompiler {
         request.mainUri,
         <Uri>[request.mainUri],
         outputPath: outputDill.path,
-        packageConfig: _packageConfig,
+        packageConfig: buildInfo.packageConfig,
       );
       final String outputPath = compilerOutput?.outputFilename;
 

@@ -4,10 +4,9 @@
 
 import 'dart:developer';
 import 'dart:io' show Platform;
-import 'dart:ui' as ui show Scene, SceneBuilder, Window;
+import 'dart:ui' as ui show Scene, SceneBuilder, FlutterView;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:vector_math/vector_math_64.dart';
 
@@ -57,7 +56,7 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
   RenderView({
     RenderBox? child,
     required ViewConfiguration configuration,
-    required ui.Window window,
+    required ui.FlutterView window,
   }) : assert(configuration != null),
        _configuration = configuration,
        _window = window {
@@ -85,7 +84,7 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
     markNeedsLayout();
   }
 
-  final ui.Window _window;
+  final ui.FlutterView _window;
 
   /// Whether Flutter should automatically compute the desired system UI.
   ///
@@ -107,19 +106,6 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
   ///  * [AnnotatedRegion], for placing [SystemUiOverlayStyle] in the layer tree.
   ///  * [SystemChrome.setSystemUIOverlayStyle], for imperatively setting the system ui style.
   bool automaticSystemUiAdjustment = true;
-
-  /// Bootstrap the rendering pipeline by scheduling the first frame.
-  ///
-  /// Deprecated. Call [prepareInitialFrame] followed by a call to
-  /// [PipelineOwner.requestVisualUpdate] on [owner] instead.
-  @Deprecated(
-    'Call prepareInitialFrame followed by owner.requestVisualUpdate() instead. '
-    'This feature was deprecated after v1.10.0.'
-  )
-  void scheduleInitialFrame() {
-    prepareInitialFrame();
-    owner!.requestVisualUpdate();
-  }
 
   /// Bootstrap the rendering pipeline by preparing the first frame.
   ///
@@ -334,7 +320,7 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
     properties.add(DiagnosticsProperty<Size>('window size', _window.physicalSize, tooltip: 'in physical pixels'));
     properties.add(DoubleProperty('device pixel ratio', _window.devicePixelRatio, tooltip: 'physical pixels per logical pixel'));
     properties.add(DiagnosticsProperty<ViewConfiguration>('configuration', configuration, tooltip: 'in logical pixels'));
-    if (_window.semanticsEnabled)
+    if (_window.platformDispatcher.semanticsEnabled)
       properties.add(DiagnosticsNode.message('semantics enabled'));
   }
 }

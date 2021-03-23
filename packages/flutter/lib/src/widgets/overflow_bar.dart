@@ -5,7 +5,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 
 import 'basic.dart';
@@ -57,31 +56,31 @@ enum OverflowBarAlignment {
 /// Widget build(BuildContext context) {
 ///   return Container(
 ///     alignment: Alignment.center,
-///     padding: EdgeInsets.all(16),
+///     padding: const EdgeInsets.all(16),
 ///     color: Colors.black.withOpacity(0.15),
 ///     child: Material(
 ///       color: Colors.white,
 ///       elevation: 24,
-///       shape: RoundedRectangleBorder(
+///       shape: const RoundedRectangleBorder(
 ///         borderRadius: BorderRadius.all(Radius.circular(4))
 ///       ),
 ///       child: Padding(
-///         padding: EdgeInsets.all(8),
+///         padding: const EdgeInsets.all(8),
 ///         child: SingleChildScrollView(
 ///           child: Column(
 ///             mainAxisSize: MainAxisSize.min,
 ///             crossAxisAlignment: CrossAxisAlignment.stretch,
 ///             children: <Widget>[
-///               Container(height: 128, child: Placeholder()),
+///               const SizedBox(height: 128, child: Placeholder()),
 ///               Align(
 ///                 alignment: AlignmentDirectional.centerEnd,
 ///                 child: OverflowBar(
 ///                   spacing: 8,
 ///                   overflowAlignment: OverflowBarAlignment.end,
 ///                   children: <Widget>[
-///                     TextButton(child: Text('Cancel'), onPressed: () { }),
-///                     TextButton(child: Text('Really Really Cancel'), onPressed: () { }),
-///                     OutlinedButton(child: Text('OK'), onPressed: () { }),
+///                     TextButton(child: const Text('Cancel'), onPressed: () { }),
+///                     TextButton(child: const Text('Really Really Cancel'), onPressed: () { }),
+///                     OutlinedButton(child: const Text('OK'), onPressed: () { }),
 ///                   ],
 ///                 ),
 ///               ),
@@ -434,6 +433,31 @@ class _RenderOverflowBar extends RenderBox
   @override
   double? computeDistanceToActualBaseline(TextBaseline baseline) {
     return defaultComputeDistanceToHighestActualBaseline(baseline);
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    RenderBox? child = firstChild;
+    if (child == null) {
+      return constraints.smallest;
+    }
+    final BoxConstraints childConstraints = constraints.loosen();
+    double childrenWidth = 0.0;
+    double maxChildHeight = 0.0;
+    double y = 0.0;
+    while (child != null) {
+      final Size childSize = child.getDryLayout(childConstraints);
+      childrenWidth += childSize.width;
+      maxChildHeight = math.max(maxChildHeight, childSize.height);
+      y += childSize.height + overflowSpacing;
+      child = childAfter(child);
+    }
+    final double actualWidth = childrenWidth + spacing * (childCount - 1);
+    if (actualWidth > constraints.maxWidth) {
+      return constraints.constrain(Size(constraints.maxWidth, y - overflowSpacing));
+    } else {
+      return constraints.constrain(Size(actualWidth, maxChildHeight));
+    }
   }
 
   @override

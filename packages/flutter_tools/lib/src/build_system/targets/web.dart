@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
@@ -38,6 +40,9 @@ const String kServiceWorkerStrategy = 'ServiceWorkerStrategy';
 
 /// Whether the dart2js build should output source maps.
 const String kSourceMapsEnabled = 'SourceMaps';
+
+/// Whether the dart2js native null assertions are enabled.
+const String kNativeNullAssertions = 'NativeNullAssertions';
 
 /// The caching strategy for the generated service worker.
 enum ServiceWorkerStrategy {
@@ -95,10 +100,10 @@ class WebEntrypointTarget extends Target {
       logger: environment.logger,
     );
     final FlutterProject flutterProject = FlutterProject.current();
-    final String languageVersion = determineLanguageVersion(
+    final LanguageVersion languageVersion = determineLanguageVersion(
       environment.fileSystem.file(targetFile),
       packageConfig[flutterProject.manifest.appName],
-    ) ?? '';
+    );
 
     // Use the PackageConfig to find the correct package-scheme import path
     // for the user application. If the application has a mix of package-scheme
@@ -122,7 +127,7 @@ class WebEntrypointTarget extends Target {
       final String generatedImport = packageConfig.toPackageUri(generatedUri)?.toString()
         ?? generatedUri.toString();
       contents = '''
-$languageVersion
+// @dart=${languageVersion.major}.${languageVersion.minor}
 
 import 'dart:ui' as ui;
 
@@ -132,14 +137,14 @@ import '$generatedImport';
 import '$mainImport' as entrypoint;
 
 Future<void> main() async {
-  registerPlugins(webPluginRegistry);
+  registerPlugins(webPluginRegistrar);
   await ui.webOnlyInitializePlatform();
   entrypoint.main();
 }
 ''';
     } else {
       contents = '''
-$languageVersion
+// @dart=${languageVersion.major}.${languageVersion.minor}
 
 import 'dart:ui' as ui;
 
@@ -190,13 +195,16 @@ class Dart2JSTarget extends Target {
   Future<void> build(Environment environment) async {
     final BuildMode buildMode = getBuildModeForName(environment.defines[kBuildMode]);
     final bool sourceMapsEnabled = environment.defines[kSourceMapsEnabled] == 'true';
+    final bool nativeNullAssertions = environment.defines[kNativeNullAssertions] == 'true';
 
     final List<String> sharedCommandOptions = <String>[
       globals.artifacts.getArtifactPath(Artifact.engineDartBinary),
       '--disable-dart-dev',
       globals.artifacts.getArtifactPath(Artifact.dart2jsSnapshot),
       '--libraries-spec=${globals.fs.path.join(globals.artifacts.getArtifactPath(Artifact.flutterWebSdk), 'libraries.json')}',
-      ...?decodeDartDefines(environment.defines, kExtraFrontEndOptions),
+      ...?decodeCommaSeparated(environment.defines, kExtraFrontEndOptions),
+      if (nativeNullAssertions)
+        '--native-null-assertions',
       if (buildMode == BuildMode.profile)
         '-Ddart.vm.profile=true'
       else
@@ -349,6 +357,12 @@ class WebReleaseBundle extends Target {
         final String randomHash = Random().nextInt(4294967296).toString();
         final String resultString = inputFile.readAsStringSync()
           .replaceFirst(
+            'var serviceWorkerVersion = null',
+            "var serviceWorkerVersion = '$randomHash'",
+          )
+          // This is for legacy index.html that still use the old service
+          // worker loading mechanism.
+          .replaceFirst(
             "navigator.serviceWorker.register('flutter_service_worker.js')",
             "navigator.serviceWorker.register('flutter_service_worker.js?v=$randomHash')",
           );
@@ -484,7 +498,7 @@ self.addEventListener("install", (event) => {
   return event.waitUntil(
     caches.open(TEMP).then((cache) => {
       return cache.addAll(
-        CORE.map((value) => new Request(value + '?revision=' + RESOURCES[value], {'cache': 'reload'})));
+        CORE.map((value) => new Request(value, {'cache': 'reload'})));
     })
   );
 });
@@ -610,7 +624,7 @@ async function downloadOffline() {
     }
     currentContent[key] = true;
   }
-  for (var resourceKey in Object.keys(RESOURCES)) {
+  for (var resourceKey of Object.keys(RESOURCES)) {
     if (!currentContent[resourceKey]) {
       resources.push(resourceKey);
     }

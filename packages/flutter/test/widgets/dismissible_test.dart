@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import 'package:flutter/gestures.dart' show DragStartBehavior;
-import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,7 +46,7 @@ Widget buildTest({
                 ? <DismissDirection, double>{}
                 : <DismissDirection, double>{DismissDirection.startToEnd: startToEndThreshold},
             crossAxisEndOffset: crossAxisEndOffset,
-            child: Container(
+            child: SizedBox(
               width: itemExtent,
               height: itemExtent,
               child: Text(item.toString()),
@@ -575,7 +574,7 @@ void main() {
       Directionality(
         textDirection: TextDirection.ltr,
         child: Center(
-          child: Container(
+          child: SizedBox(
             width: 100.0,
             height: 1000.0,
             child: Column(
@@ -756,7 +755,7 @@ void main() {
                 background: background,
                 dismissThresholds: const <DismissDirection, double>{},
                 crossAxisEndOffset: crossAxisEndOffset,
-                child: Container(
+                child: SizedBox(
                   width: itemExtent,
                   height: itemExtent,
                   child: Text(1.toString()),
@@ -860,5 +859,18 @@ void main() {
     await pumpWidgetTree(HitTestBehavior.translucent);
     await tester.tapAt(const Offset(10.0, 10.0));
     expect(didReceivePointerDown, isTrue);
+  });
+
+  testWidgets('DismissDirection.none does not trigger dismiss', (WidgetTester tester) async {
+    dismissDirection = DismissDirection.none;
+
+    await tester.pumpWidget(buildTest());
+    expect(dismissedItems, isEmpty);
+
+    await dismissItem(tester, 0, gestureDirection: AxisDirection.left);
+    await dismissItem(tester, 0, gestureDirection: AxisDirection.right);
+    await dismissItem(tester, 0, gestureDirection: AxisDirection.up);
+    await dismissItem(tester, 0, gestureDirection: AxisDirection.down);
+    expect(find.text('0'), findsOneWidget);
   });
 }

@@ -18,8 +18,8 @@ import 'slider_theme.dart';
 import 'theme.dart';
 
 // Examples can assume:
-// RangeValues _rangeValues = RangeValues(0.3, 0.7);
-// RangeValues _dollarsRange = RangeValues(50, 100);
+// RangeValues _rangeValues = const RangeValues(0.3, 0.7);
+// RangeValues _dollarsRange = const RangeValues(50, 100);
 // void setState(VoidCallback fn) { }
 
 /// [RangeSlider] uses this callback to paint the value indicator on the overlay.
@@ -524,7 +524,7 @@ class _RangeSliderState extends State<RangeSlider> with TickerProviderStateMixin
   // immediately selected while the drag displacement is zero. If the first
   // non-zero displacement is negative, then the left thumb is selected, and if its
   // positive, then the right thumb is selected.
-  static final RangeThumbSelector _defaultRangeThumbSelector = (
+  Thumb? _defaultRangeThumbSelector(
     TextDirection textDirection,
     RangeValues values,
     double tapValue,
@@ -566,9 +566,7 @@ class _RangeSliderState extends State<RangeSlider> with TickerProviderStateMixin
         return Thumb.end;
     }
     return null;
-  };
-
-
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1265,8 +1263,8 @@ class _RenderRangeSlider extends RenderBox with RelayoutWhenSystemFontsChangeMix
   bool get sizedByParent => true;
 
   @override
-  void performResize() {
-    size = Size(
+  Size computeDryLayout(BoxConstraints constraints) {
+    return Size(
       constraints.hasBoundedWidth ? constraints.maxWidth : _minPreferredTrackWidth + _maxSliderPartWidth,
       constraints.hasBoundedHeight ? constraints.maxHeight : math.max(_minPreferredTrackHeight!, _maxSliderPartHeight),
     );
@@ -1718,5 +1716,10 @@ class _RenderValueIndicator extends RenderBox with RelayoutWhenSystemFontsChange
     if (_state.paintTopValueIndicator != null) {
       _state.paintTopValueIndicator!(context, offset);
     }
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    return constraints.smallest;
   }
 }

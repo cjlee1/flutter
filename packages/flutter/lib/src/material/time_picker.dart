@@ -34,7 +34,7 @@ import 'time.dart';
 import 'time_picker_theme.dart';
 
 // Examples can assume:
-// BuildContext context;
+// late BuildContext context;
 
 const Duration _kDialogSizeAnimationDuration = Duration(milliseconds: 200);
 const Duration _kDialAnimateDuration = Duration(milliseconds: 200);
@@ -159,7 +159,7 @@ class _TimePickerHeader extends StatelessWidget {
         controls = Column(
           children: <Widget>[
             const SizedBox(height: 16.0),
-            Container(
+            SizedBox(
               height: kMinInteractiveDimension * 2,
               child: Row(
                 children: <Widget>[
@@ -209,7 +209,7 @@ class _TimePickerHeader extends StatelessWidget {
                   orientation: orientation,
                   onChanged: onChanged,
                 ),
-              Container(
+              SizedBox(
                 height: kMinInteractiveDimension * 2,
                 child: Row(
                   // Hour/minutes should not change positions in RTL locales.
@@ -287,7 +287,7 @@ class _HourMinuteControl extends StatelessWidget {
     final ShapeBorder shape = timePickerTheme.hourMinuteShape ?? _kDefaultShape;
 
     final Set<MaterialState> states = isSelected ? <MaterialState>{MaterialState.selected} : <MaterialState>{};
-    return Container(
+    return SizedBox(
       height: _kTimePickerHeaderControlHeight,
       child: Material(
         color: MaterialStateProperty.resolveAs(backgroundColor, states),
@@ -610,7 +610,7 @@ class _DayPeriodControl extends StatelessWidget {
         result = _DayPeriodInputPadding(
           minSize: const Size(width, kMinInteractiveDimension * 2),
           orientation: orientation,
-          child: Container(
+          child: SizedBox(
             width: width,
             height: _kTimePickerHeaderControlHeight,
             child: Material(
@@ -637,7 +637,7 @@ class _DayPeriodControl extends StatelessWidget {
         result = _DayPeriodInputPadding(
           minSize: const Size(0.0, kMinInteractiveDimension),
           orientation: orientation,
-          child: Container(
+          child: SizedBox(
             height: 40.0,
             child: Material(
               clipBehavior: Clip.antiAlias,
@@ -733,17 +733,33 @@ class _RenderInputPadding extends RenderShiftedBox {
     return 0.0;
   }
 
+  Size _computeSize({required BoxConstraints constraints, required ChildLayouter layoutChild}) {
+    if (child != null) {
+      final Size childSize = layoutChild(child!, constraints);
+      final double width = math.max(childSize.width, minSize.width);
+      final double height = math.max(childSize.height, minSize.height);
+      return constraints.constrain(Size(width, height));
+    }
+    return Size.zero;
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    return _computeSize(
+      constraints: constraints,
+      layoutChild: ChildLayoutHelper.dryLayoutChild,
+    );
+  }
+
   @override
   void performLayout() {
+    size = _computeSize(
+      constraints: constraints,
+      layoutChild: ChildLayoutHelper.layoutChild,
+    );
     if (child != null) {
-      child!.layout(constraints, parentUsesSize: true);
-      final double width = math.max(child!.size.width, minSize.width);
-      final double height = math.max(child!.size.height, minSize.height);
-      size = constraints.constrain(Size(width, height));
       final BoxParentData childParentData = child!.parentData! as BoxParentData;
       childParentData.offset = Alignment.center.alongOffset(size - child!.size as Offset);
-    } else {
-      size = Size.zero;
     }
   }
 
@@ -1236,17 +1252,17 @@ class _DialState extends State<_Dial> with SingleTickerProviderStateMixin {
         if (widget.use24HourDials) {
           selectedDialValue = widget.selectedTime.hour;
           primaryLabels = _build24HourRing(theme.textTheme, primaryLabelColor);
-          secondaryLabels = _build24HourRing(theme.accentTextTheme, secondaryLabelColor);
+          secondaryLabels = _build24HourRing(theme.textTheme, secondaryLabelColor);
         } else {
           selectedDialValue = widget.selectedTime.hourOfPeriod;
           primaryLabels = _build12HourRing(theme.textTheme, primaryLabelColor);
-          secondaryLabels = _build12HourRing(theme.accentTextTheme, secondaryLabelColor);
+          secondaryLabels = _build12HourRing(theme.textTheme, secondaryLabelColor);
         }
         break;
       case _TimePickerMode.minute:
         selectedDialValue = widget.selectedTime.minute;
         primaryLabels = _buildMinutes(theme.textTheme, primaryLabelColor);
-        secondaryLabels = _buildMinutes(theme.accentTextTheme, secondaryLabelColor);
+        secondaryLabels = _buildMinutes(theme.textTheme, secondaryLabelColor);
         break;
     }
 
@@ -2110,7 +2126,7 @@ class _TimePickerDialogState extends State<_TimePickerDialog> {
 /// Show a dialog with [initialTime] equal to the current time.
 ///
 /// ```dart
-/// Future<TimeOfDay> selectedTime = showTimePicker(
+/// Future<TimeOfDay?> selectedTime = showTimePicker(
 ///   initialTime: TimeOfDay.now(),
 ///   context: context,
 /// );
@@ -2139,13 +2155,13 @@ class _TimePickerDialogState extends State<_TimePickerDialog> {
 /// Show a dialog with the text direction overridden to be [TextDirection.rtl].
 ///
 /// ```dart
-/// Future<TimeOfDay> selectedTimeRTL = showTimePicker(
+/// Future<TimeOfDay?> selectedTimeRTL = showTimePicker(
 ///   context: context,
 ///   initialTime: TimeOfDay.now(),
-///   builder: (BuildContext context, Widget child) {
+///   builder: (BuildContext context, Widget? child) {
 ///     return Directionality(
 ///       textDirection: TextDirection.rtl,
-///       child: child,
+///       child: child!,
 ///     );
 ///   },
 /// );
@@ -2156,13 +2172,13 @@ class _TimePickerDialogState extends State<_TimePickerDialog> {
 /// Show a dialog with time unconditionally displayed in 24 hour format.
 ///
 /// ```dart
-/// Future<TimeOfDay> selectedTime24Hour = showTimePicker(
+/// Future<TimeOfDay?> selectedTime24Hour = showTimePicker(
 ///   context: context,
-///   initialTime: TimeOfDay(hour: 10, minute: 47),
-///   builder: (BuildContext context, Widget child) {
+///   initialTime: const TimeOfDay(hour: 10, minute: 47),
+///   builder: (BuildContext context, Widget? child) {
 ///     return MediaQuery(
 ///       data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-///       child: child,
+///       child: child!,
 ///     );
 ///   },
 /// );
@@ -2199,7 +2215,7 @@ Future<TimeOfDay?> showTimePicker({
     confirmText: confirmText,
     helpText: helpText,
   );
-  return await showDialog<TimeOfDay>(
+  return showDialog<TimeOfDay>(
     context: context,
     useRootNavigator: useRootNavigator,
     builder: (BuildContext context) {

@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:convert';
+// @dart = 2.8
+
 import 'dart:io';
 
 import 'package:file/memory.dart';
@@ -10,14 +11,12 @@ import 'package:yaml/yaml.dart';
 
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/logger.dart';
+import 'package:flutter_tools/src/convert.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/localizations/gen_l10n.dart';
 import 'package:flutter_tools/src/localizations/gen_l10n_types.dart';
 import 'package:flutter_tools/src/localizations/localizations_utils.dart';
-
-import 'package:test_api/test_api.dart' hide TypeMatcher, isInstanceOf; // ignore: deprecated_member_use
-// ignore: deprecated_member_use
-export 'package:test_core/test_core.dart' hide TypeMatcher, isInstanceOf, test; // Defines a 'package:test' shim.
+import 'package:test/test.dart';
 
 final String defaultL10nPathString = globals.fs.path.join('lib', 'l10n');
 final String syntheticPackagePath = globals.fs.path.join('.dart_tool', 'flutter_gen');
@@ -47,6 +46,11 @@ const String esArbFileName = 'app_es.arb';
 const String singleEsMessageArbFileString = '''
 {
   "title": "Título"
+}''';
+const String twoEsMessageArbFileString = '''
+{
+  "title": "Título",
+  "subtitle": "Subtitular"
 }''';
 const String singleZhMessageArbFileString = '''
 {
@@ -232,7 +236,7 @@ void main() {
           classNameString: defaultClassNameString,
         );
         generator.loadResources();
-        generator.writeOutputFiles();
+        generator.writeOutputFiles(BufferLogger.test());
       } on L10nException catch (e) {
         throw TestFailure('Unexpected failure during test setup: ${e.message}');
       } on Exception catch (e) {
@@ -428,7 +432,7 @@ void main() {
           classNameString: defaultClassNameString,
         )
         ..loadResources()
-        ..writeOutputFiles();
+        ..writeOutputFiles(BufferLogger.test());
     } on L10nException catch (e) {
       fail('Generating output should not fail: \n${e.message}');
     }
@@ -465,7 +469,7 @@ void main() {
     fail('Using app_en_CA_foo.arb should fail as it is not a valid locale.');
   });
 
-  test('correctly creates an unimplemented messages file', () {
+  test('correctly creates an untranslated messages file (useSyntheticPackage = true)', () {
     fs.currentDirectory.childDirectory('lib').childDirectory('l10n')
       ..createSync(recursive: true)
       ..childFile(defaultTemplateArbFileName).writeAsStringSync(twoMessageArbFileString)
@@ -481,13 +485,10 @@ void main() {
           templateArbFileName: defaultTemplateArbFileName,
           outputFileString: defaultOutputFileString,
           classNameString: defaultClassNameString,
+          untranslatedMessagesFile: fs.path.join('lib', 'l10n', 'unimplemented_message_translations.json'),
         )
         ..loadResources()
-        ..writeOutputFiles()
-        ..outputUnimplementedMessages(
-          fs.path.join('lib', 'l10n', 'unimplemented_message_translations.json'),
-          BufferLogger.test(),
-        );
+        ..writeOutputFiles(BufferLogger.test());
     } on L10nException catch (e) {
       fail('Generating output should not fail: \n${e.message}');
     }
@@ -504,6 +505,185 @@ void main() {
     }
     expect(unimplementedOutputString, contains('es'));
     expect(unimplementedOutputString, contains('subtitle'));
+  });
+
+  test('correctly creates an untranslated messages file (useSyntheticPackage = false)', () {
+    fs.currentDirectory.childDirectory('lib').childDirectory('l10n')
+      ..createSync(recursive: true)
+      ..childFile(defaultTemplateArbFileName).writeAsStringSync(twoMessageArbFileString)
+      ..childFile(esArbFileName).writeAsStringSync(singleEsMessageArbFileString);
+
+    LocalizationsGenerator generator;
+    try {
+      generator = LocalizationsGenerator(fs);
+      generator
+        ..initialize(
+          inputPathString: defaultL10nPathString,
+          outputPathString: defaultL10nPathString,
+          templateArbFileName: defaultTemplateArbFileName,
+          outputFileString: defaultOutputFileString,
+          classNameString: defaultClassNameString,
+          useSyntheticPackage: false,
+          untranslatedMessagesFile: fs.path.join('lib', 'l10n', 'unimplemented_message_translations.json'),
+        )
+        ..loadResources()
+        ..writeOutputFiles(BufferLogger.test());
+    } on L10nException catch (e) {
+      fail('Generating output should not fail: \n${e.message}');
+    }
+
+    final File unimplementedOutputFile = fs.file(
+      fs.path.join('lib', 'l10n', 'unimplemented_message_translations.json'),
+    );
+    final String unimplementedOutputString = unimplementedOutputFile.readAsStringSync();
+    try {
+      // Since ARB file is essentially JSON, decoding it should not fail.
+      json.decode(unimplementedOutputString);
+    } on Exception {
+      fail('Parsing arb file should not fail');
+    }
+    expect(unimplementedOutputString, contains('es'));
+    expect(unimplementedOutputString, contains('subtitle'));
+  });
+
+  test(
+    'untranslated messages suggestion is printed when translation is missing: '
+    'command line message',
+    () {
+      final BufferLogger testLogger = BufferLogger.test();
+      fs.currentDirectory.childDirectory('lib').childDirectory('l10n')
+        ..createSync(recursive: true)
+        ..childFile(defaultTemplateArbFileName).writeAsStringSync(twoMessageArbFileString)
+        ..childFile(esArbFileName).writeAsStringSync(singleEsMessageArbFileString);
+
+      LocalizationsGenerator generator;
+      try {
+        generator = LocalizationsGenerator(fs);
+        generator
+          ..initialize(
+            inputPathString: defaultL10nPathString,
+            outputPathString: defaultL10nPathString,
+            templateArbFileName: defaultTemplateArbFileName,
+            outputFileString: defaultOutputFileString,
+            classNameString: defaultClassNameString,
+            useSyntheticPackage: false,
+          )
+          ..loadResources()
+          ..writeOutputFiles(testLogger);
+      } on L10nException catch (e) {
+        fail('Generating output should not fail: \n${e.message}');
+      }
+
+      expect(
+        testLogger.statusText,
+        contains('To see a detailed report, use the --untranslated-messages-file'),
+      );
+      expect(
+        testLogger.statusText,
+        contains('flutter gen-l10n --untranslated-messages-file=desiredFileName.txt'),
+      );
+    },
+  );
+
+  test(
+    'untranslated messages suggestion is printed when translation is missing: '
+    'l10n.yaml message',
+    () {
+      final BufferLogger testLogger = BufferLogger.test();
+      fs.currentDirectory.childDirectory('lib').childDirectory('l10n')
+        ..createSync(recursive: true)
+        ..childFile(defaultTemplateArbFileName).writeAsStringSync(twoMessageArbFileString)
+        ..childFile(esArbFileName).writeAsStringSync(singleEsMessageArbFileString);
+
+      LocalizationsGenerator generator;
+      try {
+        generator = LocalizationsGenerator(fs);
+        generator
+          ..initialize(
+            inputPathString: defaultL10nPathString,
+            templateArbFileName: defaultTemplateArbFileName,
+            outputFileString: defaultOutputFileString,
+            classNameString: defaultClassNameString,
+          )
+          ..loadResources()
+          ..writeOutputFiles(testLogger, isFromYaml: true);
+      } on L10nException catch (e) {
+        fail('Generating output should not fail: \n${e.message}');
+      }
+
+      expect(
+        testLogger.statusText,
+        contains('To see a detailed report, use the untranslated-messages-file'),
+      );
+      expect(
+        testLogger.statusText,
+        contains('untranslated-messages-file: desiredFileName.txt'),
+      );
+    },
+  );
+
+  test(
+    'unimplemented messages suggestion is not printed when all messages '
+    'are fully translated',
+    () {
+      final BufferLogger testLogger = BufferLogger.test();
+      fs.currentDirectory.childDirectory('lib').childDirectory('l10n')
+        ..createSync(recursive: true)
+        ..childFile(defaultTemplateArbFileName).writeAsStringSync(twoMessageArbFileString)
+        ..childFile(esArbFileName).writeAsStringSync(twoMessageArbFileString);
+
+      LocalizationsGenerator generator;
+      try {
+        generator = LocalizationsGenerator(fs);
+        generator
+          ..initialize(
+            inputPathString: defaultL10nPathString,
+            outputPathString: defaultL10nPathString,
+            templateArbFileName: defaultTemplateArbFileName,
+            outputFileString: defaultOutputFileString,
+            classNameString: defaultClassNameString,
+          )
+          ..loadResources()
+          ..writeOutputFiles(testLogger);
+      } on L10nException catch (e) {
+        fail('Generating output should not fail: \n${e.message}');
+      }
+
+      expect(testLogger.statusText, '');
+    },
+  );
+
+  test('untranslated messages file included in generated JSON list of outputs', () {
+    _standardFlutterDirectoryL10nSetup(fs);
+
+    LocalizationsGenerator generator;
+    try {
+      generator = LocalizationsGenerator(fs);
+      generator
+        ..initialize(
+          inputPathString: defaultL10nPathString,
+          templateArbFileName: defaultTemplateArbFileName,
+          outputFileString: defaultOutputFileString,
+          classNameString: defaultClassNameString,
+          inputsAndOutputsListPath: syntheticL10nPackagePath,
+          untranslatedMessagesFile: fs.path.join('lib', 'l10n', 'unimplemented_message_translations.json'),
+        )
+        ..loadResources()
+        ..writeOutputFiles(BufferLogger.test());
+    } on L10nException catch (e) {
+      fail('Generating output should not fail: \n${e.message}');
+    }
+
+    final File inputsAndOutputsList = fs.file(
+      fs.path.join(syntheticL10nPackagePath, 'gen_l10n_inputs_and_outputs.json'),
+    );
+    expect(inputsAndOutputsList.existsSync(), isTrue);
+    final Map<String, dynamic> jsonResult = json.decode(
+      inputsAndOutputsList.readAsStringSync(),
+    ) as Map<String, dynamic>;
+    expect(jsonResult.containsKey('outputs'), isTrue);
+    final List<dynamic> outputList = jsonResult['outputs'] as List<dynamic>;
+    expect(outputList, contains(contains('unimplemented_message_translations.json')));
   });
 
   test(
@@ -524,7 +704,7 @@ void main() {
             useSyntheticPackage: false,
           )
           ..loadResources()
-          ..writeOutputFiles();
+          ..writeOutputFiles(BufferLogger.test());
       } on L10nException catch (e) {
         fail('Generating output should not fail: \n${e.message}');
       }
@@ -567,7 +747,7 @@ void main() {
             useSyntheticPackage: false,
           )
           ..loadResources()
-          ..writeOutputFiles();
+          ..writeOutputFiles(BufferLogger.test());
       } on L10nException catch (e) {
         fail('Generating output should not fail: \n${e.message}');
       }
@@ -599,7 +779,7 @@ void main() {
             useSyntheticPackage: false,
           )
           ..loadResources()
-          ..writeOutputFiles();
+          ..writeOutputFiles(BufferLogger.test());
       } on L10nException catch (e) {
         fail('Generating output should not fail: \n${e.message}');
       }
@@ -627,7 +807,7 @@ void main() {
           inputsAndOutputsListPath: syntheticL10nPackagePath,
         )
         ..loadResources()
-        ..writeOutputFiles();
+        ..writeOutputFiles(BufferLogger.test());
     } on L10nException catch (e) {
       fail('Generating output should not fail: \n${e.message}');
     }
@@ -803,7 +983,7 @@ void main() {
           templateArbFileName: defaultTemplateArbFileName,
           outputFileString: defaultOutputFileString,
           classNameString: defaultClassNameString,
-          preferredSupportedLocale: preferredSupportedLocale,
+          preferredSupportedLocales: preferredSupportedLocale,
         );
         generator.loadResources();
       } on L10nException catch (e) {
@@ -839,7 +1019,7 @@ void main() {
             templateArbFileName: defaultTemplateArbFileName,
             outputFileString: defaultOutputFileString,
             classNameString: defaultClassNameString,
-            preferredSupportedLocale: preferredSupportedLocale,
+            preferredSupportedLocales: preferredSupportedLocale,
           );
           generator.loadResources();
         } on L10nException catch (e) {
@@ -1074,6 +1254,7 @@ void main() {
     test('message without placeholders - should generate code comment with description and template message translation', () {
       _standardFlutterDirectoryL10nSetup(fs);
       final LocalizationsGenerator generator = LocalizationsGenerator(fs);
+      final BufferLogger testLogger = BufferLogger.test();
       try {
         generator.initialize(
           inputPathString: defaultL10nPathString,
@@ -1083,7 +1264,7 @@ void main() {
           classNameString: defaultClassNameString,
         );
         generator.loadResources();
-        generator.writeOutputFiles();
+        generator.writeOutputFiles(testLogger);
       } on Exception catch (e) {
         fail('Generating output files should not fail: $e');
       }
@@ -1116,9 +1297,9 @@ void main() {
       l10nDirectory.childFile(esArbFileName)
         .writeAsStringSync(singleEsMessageArbFileString);
 
-
-
       final LocalizationsGenerator generator = LocalizationsGenerator(fs);
+      final BufferLogger testLogger = BufferLogger.test();
+
       try {
         generator.initialize(
           inputPathString: defaultL10nPathString,
@@ -1128,7 +1309,7 @@ void main() {
           classNameString: defaultClassNameString,
         );
         generator.loadResources();
-        generator.writeOutputFiles();
+        generator.writeOutputFiles(testLogger);
       } on Exception catch (e) {
         fail('Generating output files should not fail: $e');
       }
@@ -1171,6 +1352,7 @@ void main() {
 }''');
 
       final LocalizationsGenerator generator = LocalizationsGenerator(fs);
+      final BufferLogger testLogger = BufferLogger.test();
       try {
         generator.initialize(
           inputPathString: defaultL10nPathString,
@@ -1180,7 +1362,7 @@ void main() {
           classNameString: defaultClassNameString,
         );
         generator.loadResources();
-        generator.writeOutputFiles();
+        generator.writeOutputFiles(testLogger);
       } on Exception catch (e) {
         final L10nException exception = e as L10nException;
         print(exception.message);
@@ -1220,7 +1402,7 @@ void main() {
           classNameString: defaultClassNameString,
         );
         generator.loadResources();
-        generator.writeOutputFiles();
+        generator.writeOutputFiles(BufferLogger.test());
       } on Exception catch (e) {
         fail('Generating output files should not fail: $e');
       }
@@ -1250,10 +1432,10 @@ void main() {
           templateArbFileName: defaultTemplateArbFileName,
           outputFileString: defaultOutputFileString,
           classNameString: defaultClassNameString,
-          preferredSupportedLocale: preferredSupportedLocale,
+          preferredSupportedLocales: preferredSupportedLocale,
         );
         generator.loadResources();
-        generator.writeOutputFiles();
+        generator.writeOutputFiles(BufferLogger.test());
       } on Exception catch (e) {
         fail('Generating output files should not fail: $e');
       }
@@ -1283,7 +1465,7 @@ import 'output-localization-file_zh.dart';
           useDeferredLoading: true,
         );
         generator.loadResources();
-        generator.writeOutputFiles();
+        generator.writeOutputFiles(BufferLogger.test());
       } on Exception catch (e) {
         fail('Generating output files should not fail: $e');
       }
@@ -1328,7 +1510,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('asdf'));
           expect(e.message, contains('springStartDate'));
@@ -1367,7 +1549,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('the "format" attribute needs to be set'));
           return;
@@ -1405,7 +1587,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('asdf'));
           expect(e.message, contains('progress'));
@@ -1442,7 +1624,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('Check to see if the plural message is in the proper ICU syntax format'));
           return;
@@ -1475,7 +1657,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('Check to see if the plural message is in the proper ICU syntax format'));
           return;
@@ -1504,7 +1686,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('Resource attribute "@helloWorlds" was not found'));
           return;
@@ -1536,7 +1718,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('is not properly formatted'));
           expect(e.message, contains('Ensure that it is a map with string valued keys'));
@@ -1572,7 +1754,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('app_en.arb'));
           expect(e.message, contains('FormatException'));
@@ -1587,7 +1769,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
       },
     );
 
-    test('should throw when resource is missing resource attribute', () {
+    test('should throw when resource is missing resource attribute (isResourceAttributeRequired = true)', () {
       const String arbFileWithMissingResourceAttribute = '''
 {
   "title": "Stocks"
@@ -1605,9 +1787,10 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
           templateArbFileName: defaultTemplateArbFileName,
           outputFileString: defaultOutputFileString,
           classNameString: defaultClassNameString,
+          areResourceAttributesRequired: true,
         );
         generator.loadResources();
-        generator.writeOutputFiles();
+        generator.writeOutputFiles(BufferLogger.test());
       } on L10nException catch (e) {
         expect(e.message, contains('Resource attribute "@title" was not found'));
         return;
@@ -1643,7 +1826,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('Invalid ARB resource name'));
           return;
@@ -1675,7 +1858,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('Invalid ARB resource name'));
           return;
@@ -1706,7 +1889,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
             classNameString: defaultClassNameString,
           );
           generator.loadResources();
-          generator.writeOutputFiles();
+          generator.writeOutputFiles(BufferLogger.test());
         } on L10nException catch (e) {
           expect(e.message, contains('Invalid ARB resource name'));
           return;
@@ -1730,7 +1913,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
           classNameString: defaultClassNameString,
         )
         ..loadResources()
-        ..writeOutputFiles();
+        ..writeOutputFiles(BufferLogger.test());
     } on L10nException catch (e) {
       fail('Generating output should not fail: \n${e.message}');
     }
@@ -1766,7 +1949,7 @@ import 'output-localization-file_en.dart' deferred as output-localization-file_e
           classNameString: defaultClassNameString,
         )
         ..loadResources()
-        ..writeOutputFiles();
+        ..writeOutputFiles(BufferLogger.test());
     } on L10nException catch (e) {
       fail('Generating output should not fail: \n${e.message}');
     }

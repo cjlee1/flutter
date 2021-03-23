@@ -167,7 +167,7 @@ abstract class KeyHelper {
 }
 
 /// Helper class that uses GLFW-specific key mappings.
-class GLFWKeyHelper with KeyHelper {
+class GLFWKeyHelper implements KeyHelper {
   /// This mask is used to check the [RawKeyEventDataLinux.modifiers] field to
   /// test whether the CAPS LOCK modifier key is on.
   ///
@@ -304,7 +304,7 @@ class GLFWKeyHelper with KeyHelper {
 }
 
 /// Helper class that uses GTK-specific key mappings.
-class GtkKeyHelper with KeyHelper {
+class GtkKeyHelper implements KeyHelper {
   /// This mask is used to check the [RawKeyEventDataLinux.modifiers] field to
   /// test whether one of the SHIFT modifier keys is pressed.
   ///
@@ -345,7 +345,7 @@ class GtkKeyHelper with KeyHelper {
   /// test whether one of the Meta(SUPER) modifier keys is pressed.
   ///
   /// {@macro flutter.services.GtkKeyHelper.modifierShift}
-  static const int modifierMeta = 1 << 28;
+  static const int modifierMeta = 1 << 26;
 
   int _mergeModifiers({required int modifiers, required int keyCode, required bool isDown}) {
     // GTK Key codes for modifier keys.
@@ -355,10 +355,10 @@ class GtkKeyHelper with KeyHelper {
     const int controlRightKeyCode = 0xffe4;
     const int capsLockKeyCode = 0xffe5;
     const int shiftLockKeyCode = 0xffe6;
-    const int metaLeftKeyCode = 0xffe7;
-    const int metaRightKeyCode = 0xffe8;
     const int altLeftKeyCode = 0xffe9;
     const int altRightKeyCode = 0xffea;
+    const int metaLeftKeyCode = 0xffeb;
+    const int metaRightKeyCode = 0xffec;
     const int numLockKeyCode = 0xff7f;
 
     // On GTK, the "modifiers" bitfield is the state as it is BEFORE this event

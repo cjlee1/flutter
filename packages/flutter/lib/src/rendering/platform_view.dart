@@ -11,8 +11,7 @@ import 'package:flutter/services.dart';
 
 import 'box.dart';
 import 'layer.dart';
-import 'mouse_cursor.dart';
-import 'mouse_tracking.dart';
+import 'mouse_tracker.dart';
 import 'object.dart';
 
 
@@ -166,8 +165,13 @@ class RenderAndroidView extends RenderBox with _PlatformViewGestureMixin {
   bool get isRepaintBoundary => true;
 
   @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    return constraints.biggest;
+  }
+
+  @override
   void performResize() {
-    size = constraints.biggest;
+    super.performResize();
     _sizePlatformView();
   }
 
@@ -332,8 +336,8 @@ class RenderUiKitView extends RenderBox {
   PointerEvent? _lastPointerDownEvent;
 
   @override
-  void performResize() {
-    size = constraints.biggest;
+  Size computeDryLayout(BoxConstraints constraints) {
+    return constraints.biggest;
   }
 
   @override
@@ -653,8 +657,8 @@ class PlatformViewRenderBox extends RenderBox with _PlatformViewGestureMixin {
   bool get isRepaintBoundary => true;
 
   @override
-  void performResize() {
-    size = constraints.biggest;
+  Size computeDryLayout(BoxConstraints constraints) {
+    return constraints.biggest;
   }
 
   @override
@@ -731,6 +735,9 @@ mixin _PlatformViewGestureMixin on RenderBox implements MouseTrackerAnnotation {
 
   @override
   MouseCursor get cursor => MouseCursor.uncontrolled;
+
+  @override
+  bool get validForMouseTracker => true;
 
   @override
   void handleEvent(PointerEvent event, HitTestEntry entry) {

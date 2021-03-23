@@ -31,8 +31,8 @@ enum Orientation {
 /// window, use `MediaQuery.of(context).size`.
 ///
 /// If no [MediaQuery] is in scope then the [MediaQuery.of] method will throw an
-/// exception, unless the `nullOk` argument is set to true, in which case it
-/// returns null.
+/// exception. Alternatively, [MediaQuery.maybeOf] may be used, which returns
+/// null instead of throwing if no [MediaQuery] is in scope.
 ///
 /// ## Insets and Padding
 ///
@@ -86,7 +86,7 @@ class MediaQueryData {
   /// Creates data for a media query with explicit values.
   ///
   /// Consider using [MediaQueryData.fromWindow] to create data based on a
-  /// [Window].
+  /// [dart:ui.PlatformDispatcher].
   const MediaQueryData({
     this.size = Size.zero,
     this.devicePixelRatio = 1.0,
@@ -124,8 +124,9 @@ class MediaQueryData {
   /// If you use this, you should ensure that you also register for
   /// notifications so that you can update your [MediaQueryData] when the
   /// window's metrics change. For example, see
-  /// [WidgetsBindingObserver.didChangeMetrics] or [Window.onMetricsChanged].
-  MediaQueryData.fromWindow(ui.Window window)
+  /// [WidgetsBindingObserver.didChangeMetrics] or
+  /// [dart:ui.PlatformDispatcher.onMetricsChanged].
+  MediaQueryData.fromWindow(ui.SingletonFlutterWindow window)
     : size = window.physicalSize / window.devicePixelRatio,
       devicePixelRatio = window.devicePixelRatio,
       textScaleFactor = window.textScaleFactor,
@@ -264,9 +265,9 @@ class MediaQueryData {
   ///
   /// @override
   /// Widget build(BuildContext context) {
-  ///   EdgeInsets systemGestureInsets = MediaQuery.of(context).systemGestureInsets;
+  ///   final EdgeInsets systemGestureInsets = MediaQuery.of(context).systemGestureInsets;
   ///   return Scaffold(
-  ///     appBar: AppBar(title: Text('Pad Slider to avoid systemGestureInsets')),
+  ///     appBar: AppBar(title: const Text('Pad Slider to avoid systemGestureInsets')),
   ///     body: Padding(
   ///       padding: EdgeInsets.only( // only left and right padding are needed here
   ///         left: systemGestureInsets.left,
@@ -308,7 +309,7 @@ class MediaQueryData {
   ///
   /// See also:
   ///
-  ///  * [Window.accessibilityFeatures], where the setting originates.
+  ///  * [dart:ui.PlatformDispatcher.accessibilityFeatures], where the setting originates.
   final bool accessibleNavigation;
 
   /// Whether the device is inverting the colors of the platform.
@@ -317,7 +318,8 @@ class MediaQueryData {
   ///
   /// See also:
   ///
-  ///  * [Window.accessibilityFeatures], where the setting originates.
+  ///  * [dart:ui.PlatformDispatcher.accessibilityFeatures], where the setting
+  ///    originates.
   final bool invertColors;
 
   /// Whether the user requested a high contrast between foreground and background
@@ -332,7 +334,8 @@ class MediaQueryData {
   ///
   /// See also:
   ///
-  ///  * [Window.accessibilityFeatures], where the setting originates.
+  ///  * [dart:ui.PlatformDispatcher.accessibilityFeatures], where the setting
+  ///    originates.
   final bool disableAnimations;
 
   /// Whether the platform is requesting that text be drawn with a bold font
@@ -340,7 +343,8 @@ class MediaQueryData {
   ///
   /// See also:
   ///
-  ///  * [Window.accessibilityFeatures], where the setting originates.
+  ///  * [dart:ui.PlatformDispatcher.accessibilityFeatures], where the setting
+  ///    originates.
   final bool boldText;
 
   /// Describes the navigation mode requested by the platform.
@@ -625,8 +629,8 @@ class MediaQueryData {
 /// user rotates their device).
 ///
 /// If no [MediaQuery] is in scope then the [MediaQuery.of] method will throw an
-/// exception, unless the `nullOk` argument is set to true, in which case it
-/// returns null.
+/// exception. Alternatively, [MediaQuery.maybeOf] may be used, which returns
+/// null instead of throwing if no [MediaQuery] is in scope.
 ///
 /// {@youtube 560 315 https://www.youtube.com/watch?v=A3WrA4zAaPw}
 ///

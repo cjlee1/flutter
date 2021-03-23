@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'dart:async';
 
 import 'package:meta/meta.dart';
@@ -118,34 +120,24 @@ class ChromiumLauncher {
     @required OperatingSystemUtils operatingSystemUtils,
     @required BrowserFinder browserFinder,
     @required Logger logger,
-    @visibleForTesting FileSystemUtils fileSystemUtils,
   }) : _fileSystem = fileSystem,
        _platform = platform,
        _processManager = processManager,
        _operatingSystemUtils = operatingSystemUtils,
        _browserFinder = browserFinder,
-       _logger = logger,
-       _fileSystemUtils = fileSystemUtils ?? FileSystemUtils(
-         fileSystem: fileSystem,
-         platform: platform,
-       );
+       _logger = logger;
 
   final FileSystem _fileSystem;
   final Platform _platform;
   final ProcessManager _processManager;
   final OperatingSystemUtils _operatingSystemUtils;
   final BrowserFinder _browserFinder;
-  final FileSystemUtils _fileSystemUtils;
   final Logger _logger;
 
-  bool get hasChromeInstance => _currentCompleter.isCompleted;
-
-  Completer<Chromium> _currentCompleter = Completer<Chromium>();
+  bool get hasChromeInstance => currentCompleter.isCompleted;
 
   @visibleForTesting
-  void testLaunchChromium(Chromium chromium) {
-    _currentCompleter.complete(chromium);
-  }
+  Completer<Chromium> currentCompleter = Completer<Chromium>();
 
   /// Whether we can locate the chrome executable.
   bool canFindExecutable() {
@@ -175,13 +167,14 @@ class ChromiumLauncher {
     bool skipCheck = false,
     Directory cacheDir,
   }) async {
-    if (_currentCompleter.isCompleted) {
+    if (currentCompleter.isCompleted) {
       throwToolExit('Only one instance of chrome can be started.');
     }
 
     final String chromeExecutable = _browserFinder(_platform, _fileSystem);
 
-    if (_logger.isVerbose) {
+    if (_logger.isVerbose && !_platform.isWindows) {
+      // Note: --version is not supported on windows.
       final ProcessResult versionResult = await _processManager.run(<String>[chromeExecutable, '--version']);
       _logger.printTrace('Using ${versionResult.stdout}');
     }
@@ -230,7 +223,7 @@ class ChromiumLauncher {
         _cacheUserSessionInformation(userDataDir, cacheDir);
       }));
     }
-    return _connect(Chromium._(
+    return _connect(Chromium(
       port,
       ChromeConnection('localhost', port),
       url: url,
@@ -296,12 +289,13 @@ class ChromiumLauncher {
     }
   }
 
+  // This is a directory which Chrome uses to store cookies, preferences and
+  // other session data.
+  String get _chromeDefaultPath => _fileSystem.path.join('Default');
+
   // This is a JSON file which contains configuration from the browser session,
   // such as window position. It is located under the Chrome data-dir folder.
   String get _preferencesPath => _fileSystem.path.join('Default', 'preferences');
-
-  // The directory that Chrome uses to store local storage information for web apps.
-  String get _localStoragePath => _fileSystem.path.join('Default', 'Local Storage');
 
   /// Copy Chrome user information from a Chrome session into a per-project
   /// cache.
@@ -309,47 +303,43 @@ class ChromiumLauncher {
   /// Note: more detailed docs of the Chrome user preferences store exists here:
   /// https://www.chromium.org/developers/design-documents/preferences.
   void _cacheUserSessionInformation(Directory userDataDir, Directory cacheDir) {
-    final File targetPreferencesFile = _fileSystem.file(_fileSystem.path.join(cacheDir?.path ?? '', _preferencesPath));
-    final File sourcePreferencesFile = _fileSystem.file(_fileSystem.path.join(userDataDir.path, _preferencesPath));
-    final Directory targetLocalStorageDir = _fileSystem.directory(_fileSystem.path.join(cacheDir?.path ?? '', _localStoragePath));
-    final Directory sourceLocalStorageDir = _fileSystem.directory(_fileSystem.path.join(userDataDir.path, _localStoragePath));
-
-    if (sourcePreferencesFile.existsSync()) {
-      targetPreferencesFile.parent.createSync(recursive: true);
-      // If the file contains a crash string, remove it to hide the popup on next run.
-      final String contents = sourcePreferencesFile.readAsStringSync();
-      targetPreferencesFile.writeAsStringSync(contents
-          .replaceFirst('"exit_type":"Crashed"', '"exit_type":"Normal"'));
-    }
-
-    if (sourceLocalStorageDir.existsSync()) {
-      targetLocalStorageDir.createSync(recursive: true);
+    final Directory targetChromeDefault = _fileSystem.directory(_fileSystem.path.join(cacheDir?.path ?? '', _chromeDefaultPath));
+    final Directory sourceChromeDefault = _fileSystem.directory(_fileSystem.path.join(userDataDir.path, _chromeDefaultPath));
+    if (sourceChromeDefault.existsSync()) {
+      targetChromeDefault.createSync(recursive: true);
       try {
-        _fileSystemUtils.copyDirectorySync(sourceLocalStorageDir, targetLocalStorageDir);
+        copyDirectory(sourceChromeDefault, targetChromeDefault);
       } on FileSystemException catch (err) {
         // This is a best-effort update. Display the message in case the failure is relevant.
         // one possible example is a file lock due to multiple running chrome instances.
         _logger.printError('Failed to save Chrome preferences: $err');
       }
     }
+
+    final File targetPreferencesFile = _fileSystem.file(_fileSystem.path.join(cacheDir?.path ?? '', _preferencesPath));
+    final File sourcePreferencesFile = _fileSystem.file(_fileSystem.path.join(userDataDir.path, _preferencesPath));
+
+    if (sourcePreferencesFile.existsSync()) {
+       targetPreferencesFile.parent.createSync(recursive: true);
+       // If the file contains a crash string, remove it to hide the popup on next run.
+       final String contents = sourcePreferencesFile.readAsStringSync();
+       targetPreferencesFile.writeAsStringSync(contents
+           .replaceFirst('"exit_type":"Crashed"', '"exit_type":"Normal"'));
+    }
   }
 
   /// Restore Chrome user information from a per-project cache into Chrome's
   /// user data directory.
   void _restoreUserSessionInformation(Directory cacheDir, Directory userDataDir) {
-    final File sourcePreferencesFile = _fileSystem.file(_fileSystem.path.join(cacheDir.path ?? '', _preferencesPath));
-    final File targetPreferencesFile = _fileSystem.file(_fileSystem.path.join(userDataDir.path, _preferencesPath));
-    final Directory sourceLocalStorageDir = _fileSystem.directory(_fileSystem.path.join(cacheDir.path ?? '', _localStoragePath));
-    final Directory targetLocalStorageDir = _fileSystem.directory(_fileSystem.path.join(userDataDir.path, _localStoragePath));
-
-    if (sourcePreferencesFile.existsSync()) {
-      targetPreferencesFile.parent.createSync(recursive: true);
-      sourcePreferencesFile.copySync(targetPreferencesFile.path);
-    }
-
-    if (sourceLocalStorageDir.existsSync()) {
-      targetLocalStorageDir.createSync(recursive: true);
-      _fileSystemUtils.copyDirectorySync(sourceLocalStorageDir, targetLocalStorageDir);
+    final Directory sourceChromeDefault = _fileSystem.directory(_fileSystem.path.join(cacheDir.path ?? '', _chromeDefaultPath));
+    final Directory targetChromeDefault = _fileSystem.directory(_fileSystem.path.join(userDataDir.path, _chromeDefaultPath));
+    try {
+      if (sourceChromeDefault.existsSync()) {
+        targetChromeDefault.createSync(recursive: true);
+        copyDirectory(sourceChromeDefault, targetChromeDefault);
+      }
+    } on FileSystemException catch (err) {
+      _logger.printError('Failed to restore Chrome preferences: $err');
     }
   }
 
@@ -365,16 +355,16 @@ class ChromiumLauncher {
             'Unable to connect to Chrome debug port: ${chrome.debugPort}\n $e');
       }
     }
-    _currentCompleter.complete(chrome);
+    currentCompleter.complete(chrome);
     return chrome;
   }
 
-  Future<Chromium> get connectedInstance => _currentCompleter.future;
+  Future<Chromium> get connectedInstance => currentCompleter.future;
 }
 
 /// A class for managing an instance of a Chromium browser.
 class Chromium {
-  Chromium._(
+  Chromium(
     this.debugPort,
     this.chromeConnection, {
     this.url,
@@ -393,7 +383,7 @@ class Chromium {
 
   Future<void> close() async {
     if (_chromiumLauncher.hasChromeInstance) {
-      _chromiumLauncher._currentCompleter = Completer<Chromium>();
+      _chromiumLauncher.currentCompleter = Completer<Chromium>();
     }
     chromeConnection.close();
     _process?.kill();

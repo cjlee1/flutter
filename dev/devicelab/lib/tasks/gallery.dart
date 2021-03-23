@@ -6,9 +6,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-
 import '../framework/adb.dart';
 import '../framework/framework.dart';
+import '../framework/host_agent.dart';
 import '../framework/task_result.dart';
 import '../framework/utils.dart';
 
@@ -101,6 +101,8 @@ class GalleryTransitionTest {
         'test_driver/$testDriver.dart',
         '-d',
         deviceId,
+        '--screenshot',
+        hostAgent.dumpDirectory.path,
       ]);
     });
 
@@ -119,15 +121,14 @@ class GalleryTransitionTest {
       summary['transitions'] = transitions;
       summary['missed_transition_count'] = _countMissedTransitions(transitions);
     }
-    final List<String> detailFiles = <String>[
-      if (transitionDurationFile != null)
-        '${galleryDirectory.path}/build/$transitionDurationFile.json',
-      if (timelineTraceFile != null)
-        '${galleryDirectory.path}/build/$timelineTraceFile.json'
-    ];
 
     return TaskResult.success(summary,
-      detailFiles: detailFiles.isNotEmpty ? detailFiles : null,
+      detailFiles: <String>[
+        if (transitionDurationFile != null)
+          '${galleryDirectory.path}/build/$transitionDurationFile.json',
+        if (timelineTraceFile != null)
+          '${galleryDirectory.path}/build/$timelineTraceFile.json'
+      ],
       benchmarkScoreKeys: <String>[
         if (transitionDurationFile != null)
           'missed_transition_count',

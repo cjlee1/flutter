@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:ui' show
@@ -225,8 +224,9 @@ class TextInputType {
 ///
 /// Despite the logical meaning of each action, choosing a particular
 /// [TextInputAction] does not necessarily cause any specific behavior to
-/// happen. It is up to the developer to ensure that the behavior that occurs
-/// when an action button is pressed is appropriate for the action button chosen.
+/// happen, other than changing the focus when approapriate. It is up to the
+/// developer to ensure that the behavior that occurs when an action button is
+/// pressed is appropriate for the action button chosen.
 ///
 /// For example: If the user presses the keyboard action button on iOS when it
 /// reads "Emergency Call", the result should not be a focus change to the next
@@ -314,6 +314,8 @@ enum TextInputAction {
   /// Logical meaning: The user is done with the current input source and wants
   /// to move to the next one.
   ///
+  /// Moves the focus to the next focusable item in the same [FocusScope].
+  ///
   /// Android: Corresponds to Android's "IME_ACTION_NEXT". The OS displays a
   /// button that represents moving forward, e.g., a right-facing arrow button.
   ///
@@ -323,6 +325,8 @@ enum TextInputAction {
 
   /// Logical meaning: The user wishes to return to the previous input source
   /// in the group, e.g., a form with multiple [TextField]s.
+  ///
+  /// Moves the focus to the previous focusable item in the same [FocusScope].
   ///
   /// Android: Corresponds to Android's "IME_ACTION_PREVIOUS". The OS displays a
   /// button that represents moving backward, e.g., a left-facing arrow button.
@@ -750,11 +754,59 @@ class TextEditingValue {
   );
 }
 
-/// An interface for manipulating the selection, to be used by the implementor
+/// Indicates what triggered the change in selected text (including changes to
+/// the cursor location).
+enum SelectionChangedCause {
+  /// The user tapped on the text and that caused the selection (or the location
+  /// of the cursor) to change.
+  tap,
+
+  /// The user tapped twice in quick succession on the text and that caused
+  /// the selection (or the location of the cursor) to change.
+  doubleTap,
+
+  /// The user long-pressed the text and that caused the selection (or the
+  /// location of the cursor) to change.
+  longPress,
+
+  /// The user force-pressed the text and that caused the selection (or the
+  /// location of the cursor) to change.
+  forcePress,
+
+  /// The user used the keyboard to change the selection or the location of the
+  /// cursor.
+  ///
+  /// Keyboard-triggered selection changes may be caused by the IME as well as
+  /// by accessibility tools (e.g. TalkBack on Android).
+  keyboard,
+
+  /// The user used the selection toolbar to change the selection or the
+  /// location of the cursor.
+  ///
+  /// An example is when the user taps on select all in the tool bar.
+  toolBar,
+
+  /// The user used the mouse to change the selection by dragging over a piece
+  /// of text.
+  drag,
+}
+
+/// A mixin for manipulating the selection, to be used by the implementer
 /// of the toolbar widget.
-abstract class TextSelectionDelegate {
+mixin TextSelectionDelegate {
   /// Gets the current text input.
   TextEditingValue get textEditingValue;
+
+  /// Indicates that the user has requested the delegate to replace its current
+  /// text editing state with [value].
+  ///
+  /// The new [value] is treated as user input and thus may subject to input
+  /// formatting.
+  @Deprecated(
+    'Use the userUpdateTextEditingValue instead. '
+    'This feature was deprecated after v1.26.0-17.2.pre.'
+  )
+  set textEditingValue(TextEditingValue value) {}
 
   /// Indicates that the user has requested the delegate to replace its current
   /// text editing state with [value].
@@ -764,13 +816,17 @@ abstract class TextSelectionDelegate {
   ///
   /// See also:
   ///
-  /// * [EditableTextState.textEditingValue]: an implementation that applies
-  ///   additional pre-processing to the specified [value], before updating the
-  ///   text editing state.
-  set textEditingValue(TextEditingValue value);
+  /// * [EditableTextState.userUpdateTextEditingValue]: an implementation that
+  ///   applies additional pre-processing to the specified [value], before
+  ///   updating the text editing state.
+  void userUpdateTextEditingValue(TextEditingValue value, SelectionChangedCause cause);
 
   /// Hides the text selection toolbar.
-  void hideToolbar();
+  ///
+  /// By default, hideHandles is true, and the toolbar is hidden along with its
+  /// handles. If hideHandles is set to false, then the toolbar will be hidden
+  /// but the handles will remain.
+  void hideToolbar([bool hideHandles = true]);
 
   /// Brings the provided [TextPosition] into the visible area of the text
   /// input.
@@ -954,7 +1010,8 @@ class TextInputConnection {
   /// The given `rect` can not be null. If any of the 4 coordinates of the given
   /// [Rect] is not finite, a [Rect] of size (-1, -1) will be sent instead.
   ///
-  /// The information is currently only used on iOS, for positioning the IME bar.
+  /// This information is used for positioning the IME candidates menu on each
+  /// platform.
   void setComposingRect(Rect rect) {
     assert(rect != null);
     if (rect == _cachedRect)
@@ -1066,7 +1123,7 @@ RawFloatingCursorPoint _toTextPoint(FloatingCursorDragState state, Map<String, d
   assert(encoded['Y'] != null, 'You must provide a value for the vertical location of the floating cursor.');
   final Offset offset = state == FloatingCursorDragState.Update
     ? Offset(encoded['X'] as double, encoded['Y'] as double)
-    : const Offset(0, 0);
+    : Offset.zero;
   return RawFloatingCursorPoint(offset: offset, state: state);
 }
 
@@ -1411,6 +1468,7 @@ class TextInput {
   ///
   /// See also:
   ///
+  /// * [EditableText.autofillHints] for autofill save troubleshooting tips.
   /// * [AutofillGroup.onDisposeAction], a configurable action that runs when a
   ///   topmost [AutofillGroup] is getting disposed.
   static void finishAutofillContext({ bool shouldSave = true }) {

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// @dart = 2.8
+
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
 import 'package:flutter_tools/src/application_package.dart';
@@ -12,14 +14,15 @@ import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/convert.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/drive/drive_service.dart';
+import 'package:flutter_tools/src/version.dart';
 import 'package:flutter_tools/src/vmservice.dart';
-import 'package:mockito/mockito.dart';
 import 'package:package_config/package_config_types.dart';
-import 'package:process/process.dart';
+import 'package:test/fake.dart';
 import 'package:vm_service/vm_service.dart' as vm_service;
 
 import '../../src/common.dart';
 import '../../src/context.dart';
+import '../../src/fakes.dart';
 
 
 final vm_service.Isolate fakeUnpausedIsolate = vm_service.Isolate(
@@ -44,6 +47,7 @@ final vm_service.Isolate fakeUnpausedIsolate = vm_service.Isolate(
   runnable: true,
   startTime: 0,
   isSystemIsolate: false,
+  isolateFlags: <vm_service.IsolateFlag>[],
 );
 
 final vm_service.Isolate fakePausedIsolate = vm_service.Isolate(
@@ -72,6 +76,7 @@ final vm_service.Isolate fakePausedIsolate = vm_service.Isolate(
   runnable: true,
   startTime: 0,
   isSystemIsolate: false,
+  isolateFlags: <vm_service.IsolateFlag>[],
 );
 
 final vm_service.VM fakeVM = vm_service.VM(
@@ -140,7 +145,7 @@ void main() {
     ))..failOnce = true;
 
     await expectLater(
-      () async => await driverService.start(BuildInfo.profile, device, DebuggingOptions.enabled(BuildInfo.profile), true),
+      () async => driverService.start(BuildInfo.profile, device, DebuggingOptions.enabled(BuildInfo.profile), true),
       returnsNormally,
     );
   });
@@ -151,7 +156,7 @@ void main() {
     ]);
     final FakeProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
       const FakeCommand(
-        command: <String>['dart', 'pub', 'run', 'test', '--enable-experiment=non-nullable', 'foo.test', '-rexpanded'],
+        command: <String>['dart', '--enable-experiment=non-nullable', 'foo.test', '-rexpanded'],
         exitCode: 23,
         environment: <String, String>{
           'FOO': 'BAR',
@@ -212,7 +217,7 @@ void main() {
     ]);
     final FakeProcessManager processManager = FakeProcessManager.list(<FakeCommand>[
       const FakeCommand(
-        command: <String>['dart', 'pub', 'run', 'test', 'foo.test', '-rexpanded'],
+        command: <String>['dart', 'foo.test', '-rexpanded'],
         exitCode: 11,
         environment: <String, String>{
           'VM_SERVICE_URL': 'http://127.0.0.1:1234/'
@@ -285,9 +290,13 @@ void main() {
     expect(json.decode(fileSystem.file('out.json').readAsStringSync()), <String, Object>{
       'platform': 'android',
       'name': 'test',
-      'engineRevision': null,
+      'engineRevision': 'abcdefghijklmnopqrstuvwxyz',
       'data': <String, Object>{'A': 'B'}
     });
+  }, overrides: <Type, Generator>{
+    FlutterVersion: () => FakeFlutterVersion(
+      engineRevision: 'abcdefghijklmnopqrstuvwxyz',
+    )
   });
 
   testWithoutContext('Can connect to existing application and stop it during cleanup', () async {
@@ -360,7 +369,7 @@ void main() {
 FlutterDriverService setUpDriverService({
   Logger logger,
   ProcessManager processManager,
-  vm_service.VmService vmService,
+  FlutterVmService vmService,
 }) {
   logger ??= BufferLogger.test();
   return FlutterDriverService(
